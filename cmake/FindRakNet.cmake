@@ -1,0 +1,27 @@
+IF(WIN32)
+  set(RakNet_LIBRARY_DEBUG ${CMAKE_BINARY_DIR}/extern/raknet/lib/Debug/RakNetLibStaticd.lib)
+  set(RakNet_LIBRARY_RELEASE ${CMAKE_BINARY_DIR}/extern/raknet/lib/RelWithDebInfo/RakNetLibStatic.lib)
+ELSE()
+  set(RakNet_LIBRARY_DEBUG ${CMAKE_BINARY_DIR}/extern/raknet/lib/libRakNetLibStaticd.a)
+  set(RakNet_LIBRARY_RELEASE ${CMAKE_BINARY_DIR}/extern/raknet/lib/libRakNetLibStatic.a)
+ENDIF(WIN32)
+
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/extern/raknet/CMakeLists.txt")
+    message(FATAL_ERROR "extern/raknet is missing. Run the build script to clone CrabNet.")
+endif()
+
+add_subdirectory(extern/raknet)
+
+SET(RakNet_INCLUDES ${CMAKE_SOURCE_DIR}/extern/raknet/include/raknet)
+
+IF (CMAKE_CONFIGURATION_TYPES OR CMAKE_BUILD_TYPE)
+   SET(RakNet_LIBRARY optimized ${RakNet_LIBRARY_RELEASE} debug ${RakNet_LIBRARY_DEBUG})
+   IF(WIN32)
+    SET(RakNet_LIBRARY optimized ${RakNet_LIBRARY_RELEASE} debug ${RakNet_LIBRARY_DEBUG} ws2_32.lib)
+   ENDIF(WIN32)
+ELSE()
+  SET(RakNet_LIBRARY ${RakNet_LIBRARY_RELEASE})
+  IF(WIN32)
+    SET(RakNet_LIBRARY ${RakNet_LIBRARY_RELEASE} ws2_32.lib)
+  ENDIF(WIN32)
+ENDIF()

@@ -1,0 +1,43 @@
+TES3MP Water FX Update
+======================
+
+Implemented in water_fragment.glsl (and synced to files/, cmake/files/, manual/files/, .github/files/):
+
+1) Surface shadows on water
+- Shadow factor now affects the visible water surface, not just specular highlights.
+- Added soft preservation of reflections in shadow so water keeps readable reflections instead of becoming flat black.
+- Shadow response is angle-aware and lighter at high fresnel angles.
+
+2) Time-of-day water haze
+- Added lightweight distance + horizon based haze over the water surface.
+- Dawn/dusk gets a warmer veil.
+- Night gets a subtle cool haze.
+- Implemented as a cheap color pass with smoothstep/mix only.
+
+3) Floating luminescent particles
+- Added procedural surface motes directly in the water shader.
+- They drift slowly, flicker softly, and are strongest at dusk/night.
+- Effect fades with rain and distance to protect performance.
+- Restricted to above-water camera view so it does not pollute underwater rendering.
+
+Performance notes
+- The luminescent motes are shader-procedural, not a separate engine particle system.
+- They are range-limited and time-of-day gated.
+- The haze is extremely cheap.
+- The biggest added cost is the night-only mote pass, but it is clamped to short range and low density.
+
+Files changed
+- files/shaders/water_fragment.glsl
+- cmake/files/shaders/water_fragment.glsl
+- manual/files/shaders/water_fragment.glsl
+- .github/files/shaders/water_fragment.glsl
+
+Recommended in-game test cases
+- Noon with shadows ON: check visible shadowing on water surface near piers/rocks/shore.
+- Sunset: verify warm haze near the horizon.
+- Deep night: verify soft green-cyan drifting motes on calm water.
+- Rainy night: verify motes fade down and rain ripples still dominate.
+
+Notes
+- This update does not create engine-level particle emitters; it simulates luminescent floating particles in the water shader itself.
+- If you want true independent 3D particles next, that should be done as a separate VFX/particle-system pass.

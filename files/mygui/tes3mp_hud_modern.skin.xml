@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<MyGUI type="Resource" version="1.1">
+
+    <!-- ============================================================== -->
+    <!-- Modern chat panel background: semi-transparent dark panel.       -->
+    <!-- Alpha is lowered from the panel widget's Alpha property          -->
+    <!-- (set from C++ to 0.85).                                          -->
+    <!-- ============================================================== -->
+    <Resource type="ResourceSkin" name="HUD_ChatPanel" size="40 40">
+        <Child type="Widget" skin="BlackBG" offset="0 0 40 40" align="Stretch"/>
+        <Child type="Widget" skin="MW_Box"  offset="0 0 40 40" align="Stretch"/>
+    </Resource>
+
+    <!-- ScrollView skin with invisible scrollbars (we scroll via C++).   -->
+    <Resource type="ResourceSkin" name="MW_ChatScrollView" size="16 16">
+        <Property key="NeedKey" value="false"/>
+    </Resource>
+
+    <!-- EditBox skin for the chat-history widget:                        -->
+    <!--   EditBox-widgets require a BasisSkin of type "EditText",        -->
+    <!--   so we provide it directly here rather than via Child elements. -->
+    <Resource type="ResourceSkin" name="MW_ChatHistoryEdit" size="16 16">
+        <Property key="FontName" value="Russo"/>
+        <Property key="TextAlign" value="Left Top"/>
+        <Property key="TextColour" value="1 1 1"/>
+        <BasisSkin type="EditText" offset="2 2 12 12" align="Stretch"/>
+    </Resource>
+
+    <!-- EditBox skin for the chat command line.                          -->
+    <!--   Same rule: BasisSkin type="EditText" is mandatory for EditBox. -->
+    <Resource type="ResourceSkin" name="MW_ChatCommand" size="16 16">
+        <Property key="FontName" value="Russo"/>
+        <Property key="TextAlign" value="Left VCenter"/>
+        <Property key="TextColour" value="1 1 1"/>
+        <BasisSkin type="EditText" offset="4 2 12 12" align="Stretch"/>
+    </Resource>
+
+    <!-- ============================================================== -->
+    <!-- Ally / summon frame skin (name + level + HP bar)                 -->
+    <!-- ============================================================== -->
+    <Resource type="ResourceSkin" name="HUD_AllyFrame" size="180 34">
+        <Child type="Widget" skin="BlackBG" offset="0 0 180 34" align="Stretch"/>
+        <Child type="Widget" skin="MW_Box"  offset="0 0 180 34" align="Stretch"/>
+    </Resource>
+
+</MyGUI>
