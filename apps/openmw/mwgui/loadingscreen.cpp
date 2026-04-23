@@ -1,5 +1,6 @@
 #include "loadingscreen.hpp"
 
+#include <algorithm>
 #include <array>
 #include <condition_variable>
 
@@ -43,6 +44,12 @@ namespace MWGui
         , mNestedLoadingCount(0)
         , mProgress(0)
         , mShowWallpaper(true)
+        , mLastTextAnimationTime(0.0)
+        , mTextAlpha(1.f)
+        , mTextFadingOut(false)
+        , mTextFadingIn(false)
+        , mWallpaperEffect(0)
+        , mWallpaperEffectStartTime(0.0)
     {
         mMainWidget->setSize(MyGUI::RenderManager::getInstance().getViewSize());
 
@@ -104,16 +111,28 @@ namespace MWGui
     {
         mImportantLabel = important;
 
-        mLoadingText->setCaptionWithReplacing(label);
-        int padding = mLoadingBox->getWidth() - mLoadingText->getWidth();
-        MyGUI::IntSize size(mLoadingText->getTextSize().width+padding, mLoadingBox->getHeight());
-        size.width = std::max(300, size.width);
-        mLoadingBox->setSize(size);
+        // TES3MP custom: change loading messages smoothly instead of snapping
+        // immediately. The first message appears at once; later messages fade
+        // out and fade back in with the new caption.
+        if (mCurrentLabel.empty() && mPendingLabel.empty())
+        {
+            mCurrentLabel = label;
+            mLoadingText->setCaptionWithReplacing(label);
+            mTextAlpha = 1.f;
+            mTextFadingOut = false;
+            mTextFadingIn = false;
+            mLoadingText->setAlpha(mTextAlpha);
+            layoutLoadingBox();
+            return;
+        }
 
-        if (MWBase::Environment::get().getWindowManager()->getMessagesCount() > 0)
-            mLoadingBox->setPosition(mMainWidget->getWidth()/2 - mLoadingBox->getWidth()/2, mMainWidget->getHeight()/2 - mLoadingBox->getHeight()/2);
-        else
-            mLoadingBox->setPosition(mMainWidget->getWidth()/2 - mLoadingBox->getWidth()/2, mMainWidget->getHeight() - mLoadingBox->getHeight() - 8);
+        if (label == mCurrentLabel || label == mPendingLabel)
+            return;
+
+        mPendingLabel = label;
+        mTextFadingOut = true;
+        mTextFadingIn = false;
+        mLastTextAnimationTime = mTimer.time_m();
     }
 
     void LoadingScreen::setVisible(bool visible)
@@ -184,6 +203,13 @@ namespace MWGui
         }
 
         mVisible = visible;
+        mTextAlpha = 1.f;
+        mTextFadingOut = false;
+        mTextFadingIn = false;
+        mPendingLabel.clear();
+        mLoadingText->setAlpha(mTextAlpha);
+        layoutLoadingBox();
+
         mLoadingBox->setVisible(mVisible);
         setVisible(true);
 
@@ -250,6 +276,12 @@ namespace MWGui
             bool stretch = Settings::Manager::getBool("stretch menu background", "GUI");
             mBackgroundImage->setVisible(true);
             mBackgroundImage->setBackgroundImage(randomSplash, true, stretch);
+
+            // TES3MP custom: each splash gets a different slow Skyrim-like slide
+            // movement: zoom in, zoom out, pan left/right, or pan up/down.
+            mWallpaperEffect = static_cast<int>(Misc::Rng::rollDice(5));
+            mWallpaperEffectStartTime = mTimer.time_m();
+            updateWallpaperAnimation();
         }
         mSceneImage->setBackgroundImage("");
         mSceneImage->setVisible(false);
@@ -283,6 +315,129 @@ namespace MWGui
         mProgress = value;
         mProgressBar->setTrackSize(static_cast<int>(value / (float)(mProgressBar->getScrollRange()) * mProgressBar->getLineSize()));
         draw();
+    }
+
+    void LoadingScreen::layoutLoadingBox()
+    {
+        const MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
+        mMainWidget->setSize(viewSize);
+
+        const int boxWidth = std::max(520, std::min(viewSize.width - 80, 980));
+        const int boxHeight = 110;
+        const int boxLeft = (viewSize.width - boxWidth) / 2;
+
+        int boxTop;
+        if (MWBase::Environment::get().getWindowManager()->getMessagesCount() > 0)
+            boxTop = (viewSize.height - boxHeight) / 2;
+        else
+            boxTop = viewSize.height - boxHeight - 34;
+
+        mLoadingBox->setCoord(boxLeft, boxTop, boxWidth, boxHeight);
+        mLoadingText->setCoord(22, 14, boxWidth - 44, 36);
+        mProgressBar->setCoord(22, 66, boxWidth - 44, 18);
+        mProgressBar->setLineSize(std::max(1, boxWidth - 44));
+    }
+
+    void LoadingScreen::updateLoadingTextAnimation()
+    {
+        const double now = mTimer.time_m();
+
+        if (mLastTextAnimationTime == 0.0)
+            mLastTextAnimationTime = now;
+
+        const float dt = static_cast<float>((now - mLastTextAnimationTime) / 1000.0);
+        mLastTextAnimationTime = now;
+
+        const float fadeSpeed = 3.8f;
+
+        if (mTextFadingOut)
+        {
+            mTextAlpha = std::max(0.f, mTextAlpha - dt * fadeSpeed);
+
+            if (mTextAlpha <= 0.01f)
+            {
+                if (!mPendingLabel.empty())
+                {
+                    mCurrentLabel = mPendingLabel;
+                    mPendingLabel.clear();
+                    mLoadingText->setCaptionWithReplacing(mCurrentLabel);
+                    layoutLoadingBox();
+                }
+
+                mTextFadingOut = false;
+                mTextFadingIn = true;
+            }
+        }
+        else if (mTextFadingIn)
+        {
+            mTextAlpha = std::min(1.f, mTextAlpha + dt * fadeSpeed);
+
+            if (mTextAlpha >= 0.99f)
+            {
+                mTextAlpha = 1.f;
+                mTextFadingIn = false;
+            }
+        }
+
+        mLoadingText->setAlpha(mTextAlpha);
+    }
+
+    void LoadingScreen::updateWallpaperAnimation()
+    {
+        if (!mShowWallpaper || !mBackgroundImage->getVisible())
+            return;
+
+        const MyGUI::IntSize viewSize = MyGUI::RenderManager::getInstance().getViewSize();
+        if (viewSize.width <= 0 || viewSize.height <= 0)
+            return;
+
+        const double now = mTimer.time_m();
+        const float duration = 5000.f;
+        float t = static_cast<float>((now - mWallpaperEffectStartTime) / duration);
+        t = std::max(0.f, std::min(1.f, t));
+
+        // Smoothstep easing: slow start and slow finish, like slide transitions.
+        const float eased = t * t * (3.f - 2.f * t);
+
+        int left = 0;
+        int top = 0;
+        int width = viewSize.width;
+        int height = viewSize.height;
+
+        const int zoomW = std::max(18, viewSize.width / 24);
+        const int zoomH = std::max(12, viewSize.height / 24);
+        const int panX = std::max(14, viewSize.width / 50);
+        const int panY = std::max(10, viewSize.height / 50);
+
+        switch (mWallpaperEffect)
+        {
+            case 0: // slow zoom in
+                width += static_cast<int>(zoomW * eased);
+                height += static_cast<int>(zoomH * eased);
+                left -= (width - viewSize.width) / 2;
+                top -= (height - viewSize.height) / 2;
+                break;
+            case 1: // slow zoom out
+                width += static_cast<int>(zoomW * (1.f - eased));
+                height += static_cast<int>(zoomH * (1.f - eased));
+                left -= (width - viewSize.width) / 2;
+                top -= (height - viewSize.height) / 2;
+                break;
+            case 2: // pan left/right
+                left = -panX + static_cast<int>(panX * 2 * eased);
+                width += panX * 2;
+                break;
+            case 3: // pan right/left
+                left = panX - static_cast<int>(panX * 2 * eased) - panX * 2;
+                width += panX * 2;
+                break;
+            default: // subtle vertical drift
+                top = -panY + static_cast<int>(panY * 2 * eased);
+                height += panY * 2;
+                break;
+        }
+
+        mBackgroundImage->setCoord(left, top, width, height);
     }
 
     bool LoadingScreen::needToDrawLoadingScreen()
@@ -357,6 +512,9 @@ namespace MWGui
             mLastWallpaperChangeTime = mTimer.time_m();
             changeWallpaper();
         }
+
+        updateLoadingTextAnimation();
+        updateWallpaperAnimation();
 
         if (!mShowWallpaper && mLastRenderTime < mLoadingOnTime)
         {

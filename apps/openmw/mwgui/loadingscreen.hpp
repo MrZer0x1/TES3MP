@@ -52,6 +52,10 @@ namespace MWGui
         void findSplashScreens();
         bool needToDrawLoadingScreen();
 
+        void updateLoadingTextAnimation();
+        void updateWallpaperAnimation();
+        void layoutLoadingBox();
+
         void setupCopyFramebufferToTextureCallback();
 
         Resource::ResourceSystem* mResourceSystem;
@@ -74,6 +78,16 @@ namespace MWGui
         bool mShowWallpaper;
         float mOldIcoMin = 0.f;
         unsigned int mOldIcoMax = 0;
+
+        std::string mCurrentLabel;
+        std::string mPendingLabel;
+        double mLastTextAnimationTime;
+        float mTextAlpha;
+        bool mTextFadingOut;
+        bool mTextFadingIn;
+
+        int mWallpaperEffect;
+        double mWallpaperEffectStartTime;
 
         MyGUI::Widget* mLoadingBox;
 
