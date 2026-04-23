@@ -31,6 +31,18 @@ namespace MWMechanics
 
             bool isEvading() const;
 
+            /*
+                Start of tes3mp addition
+
+                Expose whether the actor should attempt a jump this frame to unstick
+                itself. Called by AiPackage::evadeObstacles when strafe evasion has
+                failed repeatedly.
+            */
+            bool shouldJumpToEvade() const;
+            /*
+                End of tes3mp addition
+            */
+
             // Updates internal state, call each frame for moving actor
             void update(const MWWorld::Ptr& actor, const osg::Vec3f& destination, float duration);
 
@@ -55,6 +67,19 @@ namespace MWMechanics
             float mStateDuration;
             int mEvadeDirectionIndex;
             float mInitialDistance = 0;
+
+            /*
+                Start of tes3mp addition
+
+                Track how many strafe evasions in a row have not freed the actor so
+                that we can escalate to a jump when lateral movement is not enough
+                (e.g. low ledges, rocks, stairs, rubbish in dungeons).
+            */
+            int mConsecutiveEvadeFailures = 0;
+            mutable bool mTriggerJump = false;
+            /*
+                End of tes3mp addition
+            */
 
             void chooseEvasionDirection();
     };

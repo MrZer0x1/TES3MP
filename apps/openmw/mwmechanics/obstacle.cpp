@@ -82,12 +82,42 @@ namespace MWMechanics
     void ObstacleCheck::clear()
     {
         mWalkState = WalkState::Initial;
+        /*
+            Start of tes3mp addition
+
+            Also reset the jump escalation counters so that a freshly reused
+            package (e.g. on follow-chain reissue) does not jump spuriously.
+        */
+        mConsecutiveEvadeFailures = 0;
+        mTriggerJump = false;
+        /*
+            End of tes3mp addition
+        */
     }
 
     bool ObstacleCheck::isEvading() const
     {
         return mWalkState == WalkState::Evade;
     }
+
+    /*
+        Start of tes3mp addition
+
+        Return (and consume) a one-shot jump request. AiPackage::evadeObstacles
+        calls this every frame; returning true causes the actor to set
+        Movement::mPosition[2] = 1.0f for this frame, which the physics system
+        converts into a jump if the actor is on the ground.
+    */
+    bool ObstacleCheck::shouldJumpToEvade() const
+    {
+        if (!mTriggerJump)
+            return false;
+        mTriggerJump = false;
+        return true;
+    }
+    /*
+        End of tes3mp addition
+    */
 
     /*
      * input   - actor, duration (time since last check)
@@ -134,6 +164,16 @@ namespace MWMechanics
             {
                 mWalkState = WalkState::Norm;
                 mStateDuration = 0;
+                /*
+                    Start of tes3mp addition
+
+                    Actor is making progress again — evasion worked, so forget
+                    any accumulated failures.
+                */
+                mConsecutiveEvadeFailures = 0;
+                /*
+                    End of tes3mp addition
+                */
                 return;
             }
 
@@ -164,6 +204,22 @@ namespace MWMechanics
             mWalkState = WalkState::Norm;
             mStateDuration = 0;
             mPrev = position;
+            /*
+                Start of tes3mp addition
+
+                Count this evasion attempt. If the actor has now cycled through
+                every strafe direction without unblocking, request a jump on the
+                next frame to clear low obstacles (ledges, stairs, corpses, etc).
+            */
+            ++mConsecutiveEvadeFailures;
+            if (mConsecutiveEvadeFailures >= NUM_EVADE_DIRECTIONS)
+            {
+                mTriggerJump = true;
+                mConsecutiveEvadeFailures = 0;
+            }
+            /*
+                End of tes3mp addition
+            */
         }
     }
 

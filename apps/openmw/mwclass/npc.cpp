@@ -623,7 +623,8 @@ namespace MWClass
         if(!weapon.isEmpty())
             weapskill = weapon.getClass().getEquipmentSkill(weapon);
 
-        float hitchance = MWMechanics::getHitChance(ptr, victim, getSkill(ptr, weapskill));
+        // Note: getHitChance() is no longer consulted here (see dynamic-combat
+        // change below). It remains in the codebase for AI weapon-priority use.
 
         /*
             Start of tes3mp addition
@@ -644,12 +645,19 @@ namespace MWClass
             End of tes3mp addition
         */
 
-        if (Misc::Rng::roll0to99() >= hitchance)
+        /*
+            Start of dynamic-combat change
+
+            Original hit-chance roll removed. Physical contact already means
+            the attack connected; Sanctuary/Chameleon/Invisibility still let
+            the target dodge via rollCombatDodge.
+        */
+        if (MWMechanics::rollCombatDodge(ptr, victim))
         {
             /*
                 Start of tes3mp addition
 
-                If this was a failed attack by the LocalPlayer or LocalActor, send a
+                If this was a dodged attack by the LocalPlayer or LocalActor, send a
                 packet about it
 
                 Send an ID_OBJECT_HIT about it as well
@@ -674,6 +682,9 @@ namespace MWClass
             MWMechanics::reduceWeaponCondition(0.f, false, weapon, ptr);
             return;
         }
+        /*
+            End of dynamic-combat change
+        */
 
         bool healthdmg;
         float damage = 0.0f;
@@ -715,6 +726,34 @@ namespace MWClass
                 MWBase::Environment::get().getSoundManager()->playSound3D(victim, "critical damage", 1.0f, 1.0f);
             }
         }
+
+        /*
+            Start of dynamic-combat addition
+
+            Apply skill-based damage scaling and crit chance for melee/H2H.
+            Low skill can produce a graze at half damage; high skill gives
+            a multiplier and a chance of double damage.
+        */
+        {
+            int dcSkill = getSkill(ptr, weapskill);
+            if (MWMechanics::rollGrazingHit(dcSkill))
+            {
+                damage *= 0.5f;
+            }
+            else
+            {
+                bool crit = false;
+                MWMechanics::applySkillDamageBonus(damage, dcSkill, crit);
+                if (crit && ptr == MWMechanics::getPlayer())
+                {
+                    MWBase::Environment::get().getWindowManager()->messageBox("#{sTargetCriticalStrike}");
+                    MWBase::Environment::get().getSoundManager()->playSound3D(victim, "critical damage", 1.0f, 1.0f);
+                }
+            }
+        }
+        /*
+            End of dynamic-combat addition
+        */
 
         if (othercls.getCreatureStats(victim).getKnockedDown())
             damage *= store.find("fCombatKODamageMult")->mValue.getFloat();
@@ -963,6 +1002,18 @@ namespace MWClass
         {
             if (!attacker.isEmpty() && !godmode)
                 damage = scaleDamage(damage, attacker, ptr);
+
+            /*
+                Start of dynamic-combat addition (point 3)
+
+                Physical damage first drains stamina (down to -10), only the
+                leftover spills into health. Skipped in godmode.
+            */
+            if (!godmode && damage > 0.0f)
+                damage = MWMechanics::absorbPhysicalDamageWithStamina(ptr, damage);
+            /*
+                End of dynamic-combat addition
+            */
 
             if (damage > 0.0f)
             {

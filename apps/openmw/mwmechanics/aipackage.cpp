@@ -237,7 +237,26 @@ void MWMechanics::AiPackage::evadeObstacles(const MWWorld::Ptr& actor)
     }
     else
     {
-        mObstacleCheck.takeEvasiveAction(actor.getClass().getMovementSettings(actor));
+        MWMechanics::Movement& movement = actor.getClass().getMovementSettings(actor);
+        mObstacleCheck.takeEvasiveAction(movement);
+
+        /*
+            Start of tes3mp addition
+
+            If ObstacleCheck has escalated the stuck-state to a jump request
+            (strafe evasion cycled through every direction without progress),
+            push Movement::mPosition[2] = 1.0f so the physics step will fire a
+            jump on the next frame. This lets NPCs follow the player over low
+            ledges, stair edges, debris, and uneven terrain instead of
+            endlessly strafing against the obstacle.
+        */
+        if (mObstacleCheck.shouldJumpToEvade() && actor.getClass().isBipedal(actor))
+        {
+            movement.mPosition[2] = 1.0f;
+        }
+        /*
+            End of tes3mp addition
+        */
     }
 }
 

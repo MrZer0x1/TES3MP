@@ -281,23 +281,26 @@ namespace MWMechanics
                 End of tes3mp addition
             */
 
-            if (Misc::Rng::roll0to99() >= getHitChance(attacker, victim, skillValue))
-            {
-                /*
-                    Start of tes3mp addition
+            /*
+                Start of dynamic-combat change
 
-                    Mark this as a failed LocalAttack now that the hit roll has failed
-                */
+                Original behaviour rolled against getHitChance() and the attack
+                could completely whiff. Now every shot that the physics layer
+                already confirmed as a hit actually lands, unless the target
+                rolls a Sanctuary/Chameleon/Invisibility dodge.
+            */
+            if (rollCombatDodge(attacker, victim))
+            {
                 if (localAttack)
                     localAttack->success = false;
-                /*
-                    End of tes3mp addition
-                */
 
                 victim.getClass().onHit(victim, damage, false, projectile, attacker, osg::Vec3f(), false);
                 MWMechanics::reduceWeaponCondition(damage, false, weapon, attacker);
                 return;
             }
+            /*
+                End of dynamic-combat change
+            */
 
             const unsigned char* attack = weapon.get<ESM::Weapon>()->mBase->mData.mChop;
             damage = attack[0] + ((attack[1] - attack[0]) * attackStrength); // Bow/crossbow damage
@@ -314,6 +317,31 @@ namespace MWMechanics
 
             if (attacker == getPlayer())
                 attacker.getClass().skillUsageSucceeded(attacker, weaponSkill, 0);
+
+            /*
+                Start of dynamic-combat addition
+
+                Skill now scales damage. Very low skill can produce a graze
+                (0.5x) instead of a full hit; past skill 75 there's a chance
+                of a crit (2x on top of the skill multiplier).
+            */
+            if (rollGrazingHit(skillValue))
+            {
+                damage *= 0.5f;
+            }
+            else
+            {
+                bool crit = false;
+                applySkillDamageBonus(damage, skillValue, crit);
+                if (crit && attacker == getPlayer())
+                {
+                    MWBase::Environment::get().getWindowManager()->messageBox("#{sTargetCriticalStrike}");
+                    MWBase::Environment::get().getSoundManager()->playSound3D(victim, "critical damage", 1.0f, 1.0f);
+                }
+            }
+            /*
+                End of dynamic-combat addition
+            */
 
             const MWMechanics::AiSequence& sequence = victim.getClass().getCreatureStats(victim).getAiSequence();
             bool unaware = attacker == getPlayer() && !sequence.isInCombat()
@@ -409,6 +437,174 @@ namespace MWMechanics
 
         return round(attackTerm - defenseTerm);
     }
+
+    /*
+        Start of dynamic-combat addition
+
+        Sanctuary / Chameleon / Invisibility still matter in the new system:
+        they give the defender a flat percentage chance to dodge. Without this,
+        those spells become worthless now that "always hit" is on.
+    */
+    bool rollCombatDodge(const MWWorld::Ptr &attacker, const MWWorld::Ptr &victim)
+    {
+        if (victim.isEmpty() || !victim.getClass().isActor())
+            return false;
+
+        MWMechanics::CreatureStats &victimStats = victim.getClass().getCreatureStats(victim);
+
+        // Knocked-down / paralyzed targets can't dodge, regardless of buffs.
+        if (victimStats.getKnockedDown() || victimStats.isParalyzed())
+            return false;
+
+        const MWMechanics::MagicEffects &victimEffects = victimStats.getMagicEffects();
+        float dodgeChance = 0.f;
+        dodgeChance += victimEffects.get(ESM::MagicEffect::Sanctuary).getMagnitude();
+        dodgeChance += 0.25f * victimEffects.get(ESM::MagicEffect::Chameleon).getMagnitude();
+        dodgeChance += 0.5f  * victimEffects.get(ESM::MagicEffect::Invisibility).getMagnitude();
+
+        // Blinded attackers lose some accuracy too. Attacker may be empty
+        // (e.g. projectile whose caster got destroyed), so guard it.
+        if (!attacker.isEmpty() && attacker.getClass().isActor())
+        {
+            MWMechanics::CreatureStats &attackerStats = attacker.getClass().getCreatureStats(attacker);
+            dodgeChance += 0.5f * attackerStats.getMagicEffects().get(ESM::MagicEffect::Blind).getMagnitude();
+        }
+
+        if (dodgeChance <= 0.f)
+            return false;
+
+        // Cap: even invisible targets don't become 100% untouchable.
+        if (dodgeChance > 90.f)
+            dodgeChance = 90.f;
+
+        return Misc::Rng::roll0to99() < static_cast<int>(dodgeChance);
+    }
+
+    /*
+        Very low-skill attackers still sometimes produce glancing hits that
+        do half damage, so the "always hit" rule doesn't completely erase
+        the penalty of being unskilled.
+        Threshold: below skill 20 there is a linear chance of grazing,
+        maxing at ~25% at skill 0.
+    */
+    bool rollGrazingHit(int skillValue)
+    {
+        if (skillValue >= 20)
+            return false;
+        // skill 0 -> 25% graze, skill 20 -> 0%
+        int grazeChance = static_cast<int>((20 - skillValue) * 1.25f);
+        return Misc::Rng::roll0to99() < grazeChance;
+    }
+
+    /*
+        Applies the skill-as-multiplier and crit system.
+        - skillMult: 0.5x at skill 0, 1.5x at 100, 2.5x at 200.
+        - critChance: 0% up to skill 75, linearly to 100% at skill 200.
+        - Crit multiplier: x2.0 on top of skillMult.
+        outCrit is set so the caller can play a sound / show a message.
+    */
+    void applySkillDamageBonus(float &damage, int skillValue, bool &outCrit)
+    {
+        outCrit = false;
+        if (damage <= 0.f)
+            return;
+
+        // Clamp to keep math sane even if something gets weird buffs.
+        float clampedSkill = static_cast<float>(std::max(0, std::min(skillValue, 300)));
+
+        float skillMult = 0.5f + (clampedSkill / 100.0f);
+        damage *= skillMult;
+
+        if (clampedSkill > 75.f)
+        {
+            float critChance = (clampedSkill - 75.f) / 125.f; // 0..1
+            if (critChance > 1.f) critChance = 1.f;
+            if (Misc::Rng::rollProbability() < critChance)
+            {
+                damage *= 2.0f;
+                outCrit = true;
+            }
+        }
+    }
+
+    /*
+        Stamina-absorb for physical damage (point 3).
+
+        Design:
+          - The victim's fatigue takes the hit first, clamped at -10.
+          - Remainder (if any) spills into health via the caller.
+          - If fatigue is already at -10 or below when the hit lands,
+            all of the damage goes through to health.
+
+        Rationale for the -10 floor: if we let fatigue drain arbitrarily,
+        a single strong hit would use up both stamina *and* still leave
+        the victim with very negative fatigue afterwards (harder to stand
+        up / act). Cap at -10 keeps the "exhausted but not comatose" feel.
+    */
+    float absorbPhysicalDamageWithStamina(const MWWorld::Ptr &victim, float damage)
+    {
+        if (damage <= 0.f || victim.isEmpty() || !victim.getClass().isActor())
+            return damage;
+
+        const float kFatigueFloor = -10.f;
+
+        MWMechanics::CreatureStats &stats = victim.getClass().getCreatureStats(victim);
+        MWMechanics::DynamicStat<float> fatigue = stats.getFatigue();
+        float fatigueCurrent = fatigue.getCurrent();
+
+        // Already below the floor? no stamina shield.
+        if (fatigueCurrent <= kFatigueFloor)
+            return damage;
+
+        float absorbCapacity = fatigueCurrent - kFatigueFloor; // always > 0 here
+        float absorbed       = std::min(damage, absorbCapacity);
+        float newFatigue     = fatigueCurrent - absorbed;
+        // setCurrent with allowDecreaseBelowZero=true; we've already clamped above.
+        fatigue.setCurrent(newFatigue, true);
+        stats.setFatigue(fatigue);
+
+        return damage - absorbed;
+    }
+
+    /*
+        Magicka-absorb for magical damage (point 4).
+
+        Design:
+          - If magicka > 0: magicka drains first, the rest of the damage
+            (if any) spills into health 1:1.
+          - If magicka is already at 0 or below when the hit arrives,
+            the damage to health is doubled ("no shield left, full exposure").
+          - Magicka is clamped at 0 on the low end - we don't want negative
+            magicka (that would break regen logic).
+
+        Caller is responsible for godmode checks and for actually applying
+        the returned value to health.
+    */
+    float absorbMagicalDamageWithMagicka(const MWWorld::Ptr &victim, float damage)
+    {
+        if (damage <= 0.f || victim.isEmpty() || !victim.getClass().isActor())
+            return damage;
+
+        MWMechanics::CreatureStats &stats = victim.getClass().getCreatureStats(victim);
+        MWMechanics::DynamicStat<float> magicka = stats.getMagicka();
+        float magickaCurrent = magicka.getCurrent();
+
+        if (magickaCurrent <= 0.f)
+        {
+            // No magicka shield -> double damage to health.
+            return damage * 2.0f;
+        }
+
+        float absorbed      = std::min(damage, magickaCurrent);
+        float newMagicka    = magickaCurrent - absorbed;
+        magicka.setCurrent(newMagicka); // default: clamps at 0
+        stats.setMagicka(magicka);
+
+        return damage - absorbed;
+    }
+    /*
+        End of dynamic-combat addition
+    */
 
     void applyElementalShields(const MWWorld::Ptr &attacker, const MWWorld::Ptr &victim)
     {

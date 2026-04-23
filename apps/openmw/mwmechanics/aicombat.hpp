@@ -58,6 +58,26 @@ namespace MWMechanics
         bool mUseCustomDestination;
         osg::Vec3f mCustomDestination;
 
+        /*
+            Start of tes3mp addition
+
+            Sneak-ambush state: when a weak actor (lower level than its target)
+            rolls the chance, it briefly forces sneak for a stealth approach.
+            mSneakEvaluated: we only roll the chance once per combat package
+                             so we don't re-roll every frame.
+            mSneakActive:    whether Flag_ForceSneak is currently set.
+            mSneakTimer:     remaining time in the current sneak window.
+            mSneakCooldown:  time left before we can sneak again (off-window).
+        */
+        bool mSneakEvaluated;
+        bool mSneakWeakActor;
+        bool mSneakActive;
+        float mSneakTimer;
+        float mSneakCooldown;
+        /*
+            End of tes3mp addition
+        */
+
         AiCombatStorage():
         mAttackCooldown(0.0f),
         mTimerCombatMove(0.0f),
@@ -79,6 +99,19 @@ namespace MWMechanics
         mFleeBlindRunTimer(0.0f),
         mUseCustomDestination(false),
         mCustomDestination()
+        /*
+            Start of tes3mp addition
+
+            Default-initialize the sneak-ambush state.
+        */
+        , mSneakEvaluated(false),
+        mSneakWeakActor(false),
+        mSneakActive(false),
+        mSneakTimer(0.0f),
+        mSneakCooldown(0.0f)
+        /*
+            End of tes3mp addition
+        */
         {}
 
         void startCombatMove(bool isDistantCombat, float distToTarget, float rangeAttack, const MWWorld::Ptr& actor, const MWWorld::Ptr& target);
@@ -116,6 +149,17 @@ namespace MWMechanics
                 options.mPriority = 1;
                 options.mCanCancel = false;
                 options.mShouldCancelPreviousAi = false;
+                /*
+                    Start of tes3mp addition
+
+                    Allow NPCs in combat to chase targets through teleport doors, so
+                    hostile actors keep pursuing the player across cell boundaries
+                    instead of giving up at the door. This mirrors AiFollow behaviour.
+                */
+                options.mFollowTargetThroughDoors = true;
+                /*
+                    End of tes3mp addition
+                */
                 return options;
             }
 

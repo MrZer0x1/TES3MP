@@ -120,10 +120,40 @@ namespace MWMechanics
     {
         // get or create temporary storage
         AiCombatStorage& storage = state.get<AiCombatStorage>();
-        
+
+        /*
+            Start of tes3mp addition
+
+            Helper used at every termination path of execute() to make sure
+            we never leave Flag_ForceSneak on when combat ends, target dies,
+            or the actor itself dies. Without this the NPC would remain stuck
+            in sneak after battle.
+        */
+        auto clearSneakIfActive = [&]()
+        {
+            if (storage.mSneakActive)
+            {
+                actor.getClass().getCreatureStats(actor).setMovementFlag(
+                    MWMechanics::CreatureStats::Flag_ForceSneak, false);
+                storage.mSneakActive = false;
+            }
+        };
+        /*
+            End of tes3mp addition
+        */
+
         //General description
         if (actor.getClass().getCreatureStats(actor).isDead())
+        {
+            /*
+                Start of tes3mp addition
+            */
+            clearSneakIfActive();
+            /*
+                End of tes3mp addition
+            */
             return true;
+        }
 
         MWWorld::Ptr target = MWBase::Environment::get().getWorld()->searchPtrViaActorId(mTargetActorId);
         if (target.isEmpty())
@@ -132,10 +162,28 @@ namespace MWMechanics
         if(!target.getRefData().getCount() || !target.getRefData().isEnabled()  // Really we should be checking whether the target is currently registered
                                                                                 // with the MechanicsManager
                 || target.getClass().getCreatureStats(target).isDead())
+        {
+            /*
+                Start of tes3mp addition
+            */
+            clearSneakIfActive();
+            /*
+                End of tes3mp addition
+            */
             return true;
+        }
 
         if (actor == target) // This should never happen.
+        {
+            /*
+                Start of tes3mp addition
+            */
+            clearSneakIfActive();
+            /*
+                End of tes3mp addition
+            */
             return true;
+        }
 
         if (!storage.isFleeing())
         {
@@ -150,6 +198,70 @@ namespace MWMechanics
                 const bool is_target_reached = pathTo(actor, destination, duration, targetReachedTolerance);
                 if (is_target_reached) storage.mReadyToAttack = true;
             }
+
+            /*
+                Start of tes3mp addition
+
+                Weak-actor sneak-ambush. One-time roll per combat package: if
+                the actor's level is meaningfully below the target's level we
+                give them a chance to fight in stealth for short windows. This
+                plays into the vanilla sneak-attack bonus, and it makes weak
+                NPCs (guards vs. high-level players, low-level bandits, etc.)
+                feel less suicidal without turning them into instant threats.
+            */
+            if (!storage.mSneakEvaluated)
+            {
+                storage.mSneakEvaluated = true;
+
+                const int actorLevel = actor.getClass().getCreatureStats(actor).getLevel();
+                const int targetLevel = target.getClass().getCreatureStats(target).getLevel();
+                // "weak" = at least 3 levels below the target
+                // Limit to NPCs and humanoid (bipedal) creatures — four-legged,
+                // flying and aquatic creatures shouldn't sneak-ambush.
+                if (actorLevel > 0 && targetLevel - actorLevel >= 3
+                    && (actor.getClass().isNpc() || actor.getClass().isBipedal(actor)))
+                {
+                    // 25% chance to ever use sneak against this target
+                    if (Misc::Rng::rollProbability() < 0.25f)
+                        storage.mSneakWeakActor = true;
+                }
+            }
+
+            if (storage.mSneakWeakActor)
+            {
+                MWMechanics::CreatureStats& stats = actor.getClass().getCreatureStats(actor);
+
+                if (storage.mSneakActive)
+                {
+                    storage.mSneakTimer -= duration;
+                    if (storage.mSneakTimer <= 0.0f)
+                    {
+                        stats.setMovementFlag(MWMechanics::CreatureStats::Flag_ForceSneak, false);
+                        storage.mSneakActive = false;
+                        // 4-8s break before we can sneak again
+                        storage.mSneakCooldown = 4.0f + Misc::Rng::rollProbability() * 4.0f;
+                    }
+                }
+                else if (storage.mSneakCooldown > 0.0f)
+                {
+                    storage.mSneakCooldown -= duration;
+                }
+                else
+                {
+                    // Only roll when in pursuit, not while already swinging
+                    const bool inPursuit = !storage.mReadyToAttack;
+                    if (inPursuit && Misc::Rng::rollProbability() < 0.02f) // ~2% per tick -> average ~1s to trigger
+                    {
+                        stats.setMovementFlag(MWMechanics::CreatureStats::Flag_ForceSneak, true);
+                        storage.mSneakActive = true;
+                        // hold sneak for 2-4s
+                        storage.mSneakTimer = 2.0f + Misc::Rng::rollProbability() * 2.0f;
+                    }
+                }
+            }
+            /*
+                End of tes3mp addition
+            */
 
             storage.updateCombatMove(duration);
             if (storage.mReadyToAttack) updateActorsMovement(actor, duration, storage);
