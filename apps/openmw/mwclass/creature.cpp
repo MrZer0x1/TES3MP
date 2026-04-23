@@ -307,8 +307,7 @@ namespace MWClass
 
         osg::Vec3f hitPosition (result.second);
 
-        // Note: getHitChance() is no longer consulted here (see dynamic-combat
-        // change below). It remains in the codebase for AI weapon-priority use.
+        float hitchance = MWMechanics::getHitChance(ptr, victim, ref->mBase->mData.mCombat);
 
         /*
             Start of tes3mp addition
@@ -329,19 +328,12 @@ namespace MWClass
             End of tes3mp addition
         */
 
-        /*
-            Start of dynamic-combat change
-
-            Original hit-chance roll removed. Physical contact already confirms
-            the attack landed; Sanctuary / Chameleon / Invisibility still give
-            the target a chance to dodge through rollCombatDodge.
-        */
-        if(MWMechanics::rollCombatDodge(ptr, victim))
+        if(Misc::Rng::roll0to99() >= hitchance)
         {
             /*
                 Start of tes3mp addition
 
-                If this was a dodged attack by the LocalPlayer or LocalActor, send a
+                If this was a failed attack by the LocalPlayer or LocalActor, send a
                 packet about it
 
                 Send an ID_OBJECT_HIT about it as well
@@ -366,9 +358,6 @@ namespace MWClass
             MWMechanics::reduceWeaponCondition(0.f, false, weapon, ptr);
             return;
         }
-        /*
-            End of dynamic-combat change
-        */
 
         int min,max;
         switch (type)
@@ -427,34 +416,6 @@ namespace MWClass
         {
             MWMechanics::getHandToHandDamage(ptr, victim, damage, healthdmg, attackStrength);
         }
-
-        /*
-            Start of dynamic-combat addition
-
-            Apply creature combat-skill scaling and crit chance.
-            Creatures use the mCombat attribute as their "skill".
-            Crits for creatures are silent (no message box) to avoid
-            spamming the HUD, but the sound still plays.
-        */
-        {
-            int dcSkill = ref->mBase->mData.mCombat;
-            if (MWMechanics::rollGrazingHit(dcSkill))
-            {
-                damage *= 0.5f;
-            }
-            else
-            {
-                bool crit = false;
-                MWMechanics::applySkillDamageBonus(damage, dcSkill, crit);
-                if (crit)
-                {
-                    MWBase::Environment::get().getSoundManager()->playSound3D(victim, "critical damage", 1.0f, 1.0f);
-                }
-            }
-        }
-        /*
-            End of dynamic-combat addition
-        */
 
         MWMechanics::applyElementalShields(ptr, victim);
 
@@ -593,18 +554,6 @@ namespace MWClass
                     damage = scaleDamage(damage, attacker, ptr);
                     MWBase::Environment::get().getWorld()->spawnBloodEffect(ptr, hitPosition);
                 }
-
-                /*
-                    Start of dynamic-combat addition (point 3)
-
-                    Physical damage first drains stamina (down to -10), only the
-                    leftover spills into health.
-                */
-                if (damage > 0.0f)
-                    damage = MWMechanics::absorbPhysicalDamageWithStamina(ptr, damage);
-                /*
-                    End of dynamic-combat addition
-                */
 
                 MWBase::Environment::get().getSoundManager()->playSound3D(ptr, "Health Damage", 1.0f, 1.0f);
 

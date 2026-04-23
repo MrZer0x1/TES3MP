@@ -27,15 +27,6 @@
 #include "actorutil.hpp"
 #include "npcstats.hpp"
 
-/*
-    Start of dynamic-combat addition (point 4)
-    Needed for absorbMagicalDamageWithMagicka().
-*/
-#include "combat.hpp"
-/*
-    End of dynamic-combat addition
-*/
-
 namespace MWMechanics
 {
     void adjustDynamicStat(CreatureStats& creatureStats, int index, float magnitude, bool allowDecreaseBelowZero = false)
@@ -118,22 +109,7 @@ namespace MWMechanics
             if (godmode)
                 break;
             receivedMagicDamage = true;
-            /*
-                Start of dynamic-combat change (point 4)
-
-                Magic damage drains magicka first. If the target has no magicka
-                left, the damage against health is doubled. Only the amount
-                returned by absorbMagicalDamageWithMagicka() is actually
-                applied to health.
-            */
-            {
-                float dmg = absorbMagicalDamageWithMagicka(actor, magnitude);
-                if (dmg > 0.f)
-                    adjustDynamicStat(creatureStats, 0, -dmg);
-            }
-            /*
-                End of dynamic-combat change
-            */
+            adjustDynamicStat(creatureStats, effectKey.mId-ESM::MagicEffect::DamageHealth, -magnitude);
             break;
 
         case ESM::MagicEffect::DamageMagicka:
@@ -220,21 +196,7 @@ namespace MWMechanics
         {
             if (godmode)
                 break;
-            /*
-                Start of dynamic-combat change (point 4)
-
-                Elemental damage (fire/shock/frost/poison) is treated as
-                magical damage. Magicka absorbs it first; if empty, the
-                remainder is doubled against health. Resistance/weakness
-                formulas run earlier in the pipeline, so by the time we
-                get here `magnitude` is already net of them.
-            */
-            float dmg = absorbMagicalDamageWithMagicka(actor, magnitude);
-            if (dmg > 0.f)
-                adjustDynamicStat(creatureStats, 0, -dmg);
-            /*
-                End of dynamic-combat change
-            */
+            adjustDynamicStat(creatureStats, 0, -magnitude);
             receivedMagicDamage = true;
             break;
         }
