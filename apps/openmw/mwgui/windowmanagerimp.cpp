@@ -606,19 +606,6 @@ namespace MWGui
     {
         bool loading = (getMode() == GM_Loading || getMode() == GM_LoadingWallpaper);
 
-        // TES3MP custom: hide the in-game HUD during character creation dialogs,
-        // including the name input screen. This prevents the modern HUD/chat from
-        // showing behind the chargen UI.
-        bool chargen =
-            getMode() == GM_Name ||
-            getMode() == GM_Race ||
-            getMode() == GM_Class ||
-            getMode() == GM_ClassPick ||
-            getMode() == GM_ClassCreate ||
-            getMode() == GM_ClassGenerate ||
-            getMode() == GM_Birth ||
-            getMode() == GM_Review;
-
         bool mainmenucover = containsMode(GM_MainMenu) && MWBase::Environment::get().getStateManager()->getState() == MWBase::StateManager::State_NoGame;
 
         enableScene(!loading && !mainmenucover);
@@ -626,8 +613,8 @@ namespace MWGui
         if (!mMap)
             return; // UI not created yet
 
-        mHud->setVisible(mHudEnabled && !loading && !chargen);
-        mToolTips->setVisible(mHudEnabled && !loading && !chargen);
+        mHud->setVisible(mHudEnabled && !loading);
+        mToolTips->setVisible(mHudEnabled && !loading);
 
         bool gameMode = !isGuiMode();
 

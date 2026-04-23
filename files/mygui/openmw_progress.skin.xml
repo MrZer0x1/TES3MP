@@ -38,12 +38,6 @@
             <State name="normal" offset="0 0 16 2"/>
         </BasisSkin>
     </Resource>
-    <Resource type="ResourceSkin" name="MW_Progress_Loading_WideTrack" size="16 14" texture="textures\menu_bar_gray.dds" >
-        <Property key="Colour" value="0 0.815 0.820"/>
-        <BasisSkin type="MainSkin" offset="0 0 16 16" align="Stretch">
-            <State name="normal" offset="0 0 16 16"/>
-        </BasisSkin>
-    </Resource>
     <Resource type="ResourceSkin" name="ProgressText" size="16 16">
         <Property key="FontName" value="Default"/>
         <Property key="TextAlign" value="VCenter HCenter"/>
@@ -96,19 +90,5 @@
         <Child type="Button" skin="MW_Progress_Loading_Small" offset="0 0 1 6" align="Left VStretch" name="Track"/>
 
         <Child type="Widget" skin="MW_Box" offset="0 0 64 6" align="Stretch"/>
-    </Resource>
-
-    <Resource type="ResourceSkin" name="MW_ProgressScroll_LoadingWide" size="64 18">
-        <Property key="TrackFill" value="1"/>
-        <Property key="TrackRangeMargins" value="0 0"/>
-        <Property key="MinTrackSize" value="2"/>
-        <Property key="VerticalAlignment" value="false"/>
-        <Property key="MoveToClick" value="false"/>
-
-        <Child type="Widget" skin="TransparentBG" offset="3 3 58 12" align="Stretch" name="Client"/>
-        <Child type="Button" skin="MW_Progress_Loading_WideTrack" offset="0 0 1 18" align="Left VStretch" name="Track"/>
-
-        <!-- Dark framed border around the wide loading bar. -->
-        <Child type="Widget" skin="MW_Box" offset="0 0 64 18" align="Stretch"/>
     </Resource>
 </MyGUI>

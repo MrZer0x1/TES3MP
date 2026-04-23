@@ -4,15 +4,13 @@
     <!-- The entire screen -->
     <Widget type="Widget" layer="LoadingScreen" position="0 0 300 300" name="_Main" align="Stretch">
 
-        <!-- TES3MP custom Skyrim-like loading panel:
-             bigger text, shadowed ProgressText skin, wider bar in a dark frame. -->
-        <Widget type="Window" skin="MW_Dialog" position="0 190 900 110" align="Bottom HCenter" name="LoadingBox">
+        <Widget type="Window" skin="MW_Dialog" position="0 245 300 48" align="Bottom HCenter" name="LoadingBox">
 
-            <Widget type="TextBox" skin="ProgressText" position="22 14 856 36" align="Top HCenter" name="LoadingText">
+            <Widget type="TextBox" skin="SandText" position="16 5 260 18" align="Stretch" name="LoadingText">
                 <Property key="TextAlign" value="Center"/>
             </Widget>
 
-            <Widget type="ScrollBar" skin="MW_ProgressScroll_LoadingWide" position="22 66 856 18" align="Top HCenter" name="ProgressBar">
+            <Widget type="ScrollBar" skin="MW_ProgressScroll_Loading" position="16 26 260 6" align="Top HCenter" name="ProgressBar">
             </Widget>
 
         </Widget>
