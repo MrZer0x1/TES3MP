@@ -335,7 +335,6 @@ namespace MWGui
         mLoadingBox->setCoord(boxLeft, boxTop, boxWidth, boxHeight);
         mLoadingText->setCoord(22, 14, boxWidth - 44, 36);
         mProgressBar->setCoord(22, 66, boxWidth - 44, 18);
-        mProgressBar->setLineSize(std::max(1, boxWidth - 44));
     }
 
     void LoadingScreen::updateLoadingTextAnimation()
@@ -437,7 +436,7 @@ namespace MWGui
                 break;
         }
 
-        mBackgroundImage->setCoord(left, top, width, height);
+        mBackgroundImage->setCoord(MyGUI::IntCoord(left, top, width, height));
     }
 
     bool LoadingScreen::needToDrawLoadingScreen()
